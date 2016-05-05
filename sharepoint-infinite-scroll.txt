@@ -1,0 +1,183 @@
+<script language="javascript" type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script> 
+<script language="javascript" type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.11.3/jquery-ui.min.js"></script>
+<script  language="javascript" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.3.0/knockout-debug.js"></script>
+
+<script type="text/javascript" language="javascript">
+
+
+    var REC_COUNT = 5;                             //number of rows to fetch at a time
+    var LAST_ID = 9999999;                         //stores last_id loaded to the gui
+    var ROOT_SITE_URL = '/';                       //root site url to the site
+    var BASE_ANNOUNCEMENTS_LIST_TITLE = "Test";	   //name of the list you want to retrieve data
+    var BASE_ANNOUNCEMENTS_URL = '/Lists/Test';    //url to load the list
+
+
+    var anns = new AnnouncementsViewModel();	   //create a variable that is the Knockout View Model
+    var timeout;                                   //used for delaying the events slightly
+
+
+    //create an object to store the elements of the Knockout view model
+    //parameter is list item retrieved through client-side SharePoint call
+    var ANNOUNCEMENTS = function (curItem) {
+        self.isLoading = ko.observable(false);
+        this.ID = curItem.get_item('ID');
+        this.Title = curItem.get_item('Title');
+		this.DateTime = curItem.get_item('Created');
+        this.Author = curItem.get_item('Author').get_lookupValue();
+        this.AuthorID = curItem.get_item('Author').get_lookupId();
+    }
+
+    //wire up the Knockout model
+    function AnnouncementsViewModel() {
+        var self = this;
+        self.items = ko.observableArray([]);
+    }
+
+
+    //JQuery event to make sure to run events after the SharePoint page has fully loaded
+    $(document).ready(function () {
+	ExecuteOrDelayUntilScriptLoaded(initts, "sp.js");
+    });
+
+    //initial function which retrieves the SharePoint data and binds the data to the view
+    function initts() {
+        configts();
+	GetAnnouncements();
+        ko.applyBindings(anns, document.getElementById("div-announcements"));
+    }
+    
+    //auto scroll feature, to retrive more data when you bottom out the screen
+    function configts(val) {
+        $("#s4-workspace").scroll(function () {
+            clearTimeout(timeout);
+            var elem = $(this);
+
+	    //use a timeout to delay the fetch slightly when you reach the bottom of the scroll
+            timeout = setTimeout(function () {
+                if (elem[0].scrollHeight - elem.scrollTop() == elem.outerHeight()) {
+                    $("#anns-loading").show();
+                    GetAnnouncements();
+                }
+            }, 500);
+            $("#anns-loading").hide();
+        });
+    }
+
+    
+    function GetAnnouncements() {
+        var ctx = new SP.ClientContext(ROOT_SITE_URL);
+        if (ctx != undefined && ctx != null) {
+            var myweb = ctx.get_web();
+            ctx.load(myweb);
+      	    var strcaml;
+            var strorderby = "<OrderBy><FieldRef Name='ID' Ascending='False' /></OrderBy>";
+
+	    strcaml = "<View Scope='RecursiveAll'><RowLimit>" + REC_COUNT + "</RowLimit><Query><Where><Lt><FieldRef Name='ID'/><Value Type='Counter'>" + LAST_ID + "</Value></Lt></Where>" + strorderby + "</Query></View>";
+            var myannslist = myweb.get_lists().getByTitle(BASE_ANNOUNCEMENTS_LIST_TITLE);
+            var myquery = new SP.CamlQuery();
+            myquery.set_viewXml(strcaml);
+
+            var myanns = myannslist.getItems(myquery);
+            ctx.load(myanns);
+
+            ctx.executeQueryAsync(
+                                    Function.createDelegate(this, function () {
+                                        //alert(myanns.get_count());
+                                        var listEnumerator = myanns.getEnumerator();
+                                        while (listEnumerator.moveNext()) {
+                                            var curItem = listEnumerator.get_current();
+                                            anns.items.push(new ANNOUNCEMENTS(curItem));
+                                            LAST_ID = curItem.get_item('ID');
+                                        }
+                                        $("#anns-loading").hide();
+                                    }),
+                                               Function.createDelegate(this, function () { alert("Error retrieving maintenance window."); })
+                                );
+        }
+    }
+
+
+
+
+    function GetNext() {
+        GetAnnouncements();
+    }
+
+</script>
+
+<style type="text/css">
+.byline {
+               width: 100%;
+               font-size: 8pt;
+               font-style: italic;
+               padding-bottom:10px;
+}
+
+.center {
+               clear: both;
+               display: block;
+               margin-left:auto;
+               margin-right:auto;
+    	       width: 100%;
+               text-align: left;;
+}
+
+.left {	
+               clear:both;
+               float:left;
+               width:45%;
+}
+.middle {
+               float:left;
+               width:45%;
+}
+.right {
+	float:right;
+	width:5%;
+}
+.single-announcement 
+{			   
+	       text-align:left;
+               vertical-align:top;
+               border-bottom:1px solid #c1c8cd;
+               margin-top:5px;
+}
+.announcement {
+               width:525px;
+               padding-top:10px;
+               padding-bottom: 10px;
+               padding-right:5px;
+               padding-left:5px;
+}
+.announcement-title {
+      	       clear:both;
+	       white-space: normal;
+	       word-wrap: break-word;
+               font-size: 12.5pt;
+}
+
+</style>
+<div class="announcement center" style='background-color: #FAFBFC;' >
+               <div>
+                              <div id="div-announcements" data-bind="template: { name: 'annsTmpl', foreach: items }"></div>
+                              <div>
+                                             <div colspan='10' id='anns-loading' style='display:none;text-align:center;font-size:10pt;'>
+                                                            <div style='font-size:10pt;'>Loading</div>
+                                                            <img style='width: 32;height: 32;' src='/_layouts/images/GEARS_AN.gif' border='0' />
+                                             </div>
+                              </div>
+               </div>
+</div>
+<script id="annsTmpl" type="text/html">
+                                             <div class='single-post'>
+                                                            <div class='post-title' data-bind='html: Title'></div>
+                                                            <div class='byline'>
+                                                                           <div class='left' data-bind='text: Author'></div>
+                                                                           <div class='middle' data-bind='text: DateTime'></div>
+                                                            </div>
+                                                            <br/>
+                                                            <br/>
+                                                            <br/>
+                                                            
+                                             </div>
+</script>
