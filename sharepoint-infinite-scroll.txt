@@ -91,7 +91,7 @@
                                         }
                                         $("#anns-loading").hide();
                                     }),
-                                               Function.createDelegate(this, function () { alert("Error retrieving maintenance window."); })
+                                               Function.createDelegate(this, function () { alert("Error retrieving data from list."); })
                                 );
         }
     }
